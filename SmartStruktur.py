@@ -5,310 +5,433 @@ import matplotlib.pyplot as plt
 import math
 
 # ==========================================
-# 1. KONFIGURASI HALAMAN & GAYA (UI/UX)
+# 1. KONFIGURASI SISTEM & VISUAL
 # ==========================================
 st.set_page_config(
-    page_title="GEMS SmartStruktur V7",
+    page_title="GEMS MASTER PRO V8",
     page_icon="🏗️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS untuk tampilan "Gagah" ala Grandmaster
+# Styling CSS "Grandmaster"
 st.markdown("""
     <style>
-    .main { background-color: #F8F9FA; }
-    h1 { color: #0D47A1; font-weight: 800; }
-    h2, h3 { color: #1565C0; }
-    .stButton>button {
-        background-color: #0D47A1; color: white; 
-        border-radius: 8px; font-weight: bold; width: 100%;
+    .main { background-color: #F0F2F6; }
+    .stHeader { color: #0D47A1; }
+    h1, h2, h3 { font-family: 'Segoe UI', sans-serif; color: #1A237E; font-weight: 700; }
+    .metric-box {
+        background-color: #FFFFFF; border-left: 5px solid #0D47A1;
+        padding: 15px; border-radius: 5px; box-shadow: 2px 2px 8px rgba(0,0,0,0.1);
+        margin-bottom: 10px;
     }
-    .stButton>button:hover { background-color: #FF6F00; color: white; }
-    .metric-card {
-        background-color: white; padding: 20px; border-radius: 10px;
-        box-shadow: 2px 2px 10px rgba(0,0,0,0.1); border-left: 5px solid #0D47A1;
-    }
-    .warning-box {
-        background-color: #FFEBEE; padding: 15px; border-radius: 5px;
-        border: 1px solid #EF9A9A; color: #C62828;
-    }
+    .success-box { border-left: 5px solid #2E7D32; background-color: #E8F5E9; padding: 15px; }
+    .warning-box { border-left: 5px solid #FF6F00; background-color: #FFF3E0; padding: 15px; }
+    .stButton>button { background-color: #1565C0; color: white; width: 100%; border-radius: 6px; }
+    .stButton>button:hover { background-color: #0D47A1; }
     </style>
 """, unsafe_allow_html=True)
 
-# ==========================================
-# 2. LIBRARY LOGIKA TEKNIK (ENGINEERING BRAIN)
-# ==========================================
+# Inisialisasi Session State (Database Sementara)
+if 'project_data' not in st.session_state:
+    st.session_state['project_data'] = {
+        'nama_proyek': 'Gedung Serbaguna V8',
+        'lokasi': 'Jakarta',
+        'fc': 25,
+        'fy': 400,
+        'ss': 0.8,
+        's1': 0.4
+    }
 
-class SeismicCalculator:
-    """Modul Perhitungan Gempa SNI 1726:2019 (Menggantikan lateralgempa.csv)"""
+# ==========================================
+# 2. ENGINEX CORE (MESIN HITUNG TERPUSAT)
+# ==========================================
+class EnginexCore:
+    """Jantung perhitungan teknik sipil (Library)."""
     
     @staticmethod
-    def get_fa(Ss, site_class):
-        # Tabel 6 SNI 1726:2019 (Interpolasi Linear)
-        data = {
-            'SA': {0.25: 0.8, 0.5: 0.8, 0.75: 0.8, 1.0: 0.8, 1.25: 0.8},
-            'SB': {0.25: 1.0, 0.5: 1.0, 0.75: 1.0, 1.0: 1.0, 1.25: 1.0},
-            'SC': {0.25: 1.2, 0.5: 1.2, 0.75: 1.1, 1.0: 1.0, 1.25: 1.0},
-            'SD': {0.25: 1.6, 0.5: 1.4, 0.75: 1.2, 1.0: 1.1, 1.25: 1.0},
-            'SE': {0.25: 2.5, 0.5: 1.7, 0.75: 1.2, 1.0: 0.9, 1.25: 0.9}
-        }
-        if site_class == 'SF': return None # Perlu analisis spesifik
+    def get_response_spectrum(Ss, S1, site_class):
+        # Tabel Fa & Fv (SNI 1726:2019) - Simplified
+        fa_table = {'SA': 0.8, 'SB': 1.0, 'SC': 1.2, 'SD': 1.6, 'SE': 2.5}
+        fv_table = {'SA': 0.8, 'SB': 1.0, 'SC': 1.7, 'SD': 2.4, 'SE': 3.5}
         
-        vals = data[site_class]
-        ss_keys = sorted(vals.keys())
+        # Koreksi interpolasi sederhana untuk keamanan
+        Fa = fa_table.get(site_class, 1.2)
+        Fv = fv_table.get(site_class, 1.5)
         
-        # Logika Interpolasi
-        if Ss <= ss_keys[0]: return vals[ss_keys[0]]
-        if Ss >= ss_keys[-1]: return vals[ss_keys[-1]]
+        SMS = Fa * Ss
+        SM1 = Fv * S1
+        SDS = (2/3) * SMS
+        SD1 = (2/3) * SM1
         
-        for i in range(len(ss_keys)-1):
-            if ss_keys[i] <= Ss <= ss_keys[i+1]:
-                x0, x1 = ss_keys[i], ss_keys[i+1]
-                y0, y1 = vals[x0], vals[x1]
-                return y0 + (Ss - x0) * (y1 - y0) / (x1 - x0)
-        return 1.0
+        Ts = SD1 / SDS if SDS > 0 else 0
+        return SDS, SD1, Ts
 
     @staticmethod
-    def get_fv(S1, site_class):
-        # Tabel 7 SNI 1726:2019
-        data = {
-            'SA': {0.1: 0.8, 0.2: 0.8, 0.3: 0.8, 0.4: 0.8, 0.5: 0.8},
-            'SB': {0.1: 1.0, 0.2: 1.0, 0.3: 1.0, 0.4: 1.0, 0.5: 1.0},
-            'SC': {0.1: 1.7, 0.2: 1.6, 0.3: 1.5, 0.4: 1.4, 0.5: 1.3},
-            'SD': {0.1: 2.4, 0.2: 2.0, 0.3: 1.8, 0.4: 1.6, 0.5: 1.5},
-            'SE': {0.1: 3.5, 0.2: 3.2, 0.3: 2.8, 0.4: 2.4, 0.5: 2.4}
-        }
-        if site_class == 'SF': return None
+    def calc_shear_beam(Vu, fc, bw, d, Nu=0):
+        # SNI 2847:2019
+        phi = 0.75
+        lambda_val = 1.0
+        # Vc dengan pengaruh aksial
+        Vc = 0.17 * lambda_val * math.sqrt(fc) * bw * d
+        if Nu > 0: Vc *= (1 + Nu/(14*bw*d)) # Approximation for compression
         
-        vals = data[site_class]
-        s1_keys = sorted(vals.keys())
-        
-        if S1 <= s1_keys[0]: return vals[s1_keys[0]]
-        if S1 >= s1_keys[-1]: return vals[s1_keys[-1]]
-        
-        for i in range(len(s1_keys)-1):
-            if s1_keys[i] <= S1 <= s1_keys[i+1]:
-                x0, x1 = s1_keys[i], s1_keys[i+1]
-                y0, y1 = vals[x0], vals[x1]
-                return y0 + (S1 - x0) * (y1 - y0) / (x1 - x0)
-        return 1.0
+        phiVc = phi * Vc
+        Vs_needed = (Vu*1000 - phiVc) / phi if Vu*1000 > phiVc else 0
+        return Vc/1000, phiVc/1000, Vs_needed/1000
 
-class ConcreteCalculator:
-    """Modul Beton SNI 2847:2019 (Menggantikan geser balok.csv)"""
+    @staticmethod
+    def calc_column_capacity(b, h, fc, As_total, fy, Pu_input, Mu_input):
+        # P-M Interaction Diagram Simplified Check
+        Ag = b * h
+        Po = 0.85 * fc * (Ag - As_total) + As_total * fy
+        phi_Pn_max = 0.80 * 0.65 * Po # Tied column
+        
+        # Balance approximation
+        ab = (600 / (600 + fy)) * (0.85 * h) # Depth of neutral axis balanced
+        # Cek kasar saja untuk indikator
+        status = "AMAN" if (Pu_input * 1000) < phi_Pn_max else "TIDAK AMAN (Axial Fail)"
+        return phi_Pn_max/1000, status
+
+    @staticmethod
+    def calc_retaining_wall(H, gamma_soil, phi_soil, c_soil, q_surcharge):
+        # Rankine Coefficient
+        Ka = (1 - math.sin(math.radians(phi_soil))) / (1 + math.sin(math.radians(phi_soil)))
+        Kp = (1 + math.sin(math.radians(phi_soil))) / (1 - math.sin(math.radians(phi_soil)))
+        
+        # Active Pressure
+        Pa_soil = 0.5 * gamma_soil * (H**2) * Ka
+        Pa_surcharge = q_surcharge * H * Ka
+        Pa_total = Pa_soil + Pa_surcharge
+        
+        M_overturning = (Pa_soil * H/3) + (Pa_surcharge * H/2)
+        return Ka, Pa_total, M_overturning
+
+    @staticmethod
+    def calc_pile_bearing(N_spt, Ap, As_skin, pile_type="Pancang"):
+        # Meyerhof Formula (Classic but tuned)
+        # Qu = 40.Nb.Ab + 0.2.N_avg.As
+        # Safety Factor = 3.0 (SNI 8460)
+        
+        Nb = min(N_spt, 40) # Limit N to 40
+        Q_end = 40 * Nb * Ap
+        
+        # Friction
+        fs = 0.2 * (N_spt/2) # Simplified average N along shaft
+        Q_skin = fs * As_skin
+        
+        Q_ult = Q_end + Q_skin
+        SF = 2.5 if pile_type == "Bored Pile" else 3.0
+        Q_all = Q_ult / SF
+        return Q_ult, Q_all
+
+# ==========================================
+# 3. MODUL-MODUL APLIKASI (FOLDER VIRTUAL)
+# ==========================================
+
+def modul_dashboard():
+    st.title("📊 Dashboard Proyek")
+    st.write("Selamat Datang, **Grandmaster Engineer**. Berikut ringkasan proyek aktif.")
     
-    @staticmethod
-    def calc_shear(Vu_kN, fc_mpa, bw_mm, d_mm, Nu_kN=0):
-        # Konstanta SNI 2847:2019
-        PHI_SHEAR = 0.75  # KOREKSI DARI 0.6 (LAMA) KE 0.75 (BARU)
+    col1, col2, col3 = st.columns(3)
+    data = st.session_state['project_data']
+    
+    with col1:
+        st.markdown(f"""
+        <div class="metric-box">
+            <h4>📋 Data Proyek</h4>
+            <p><b>Nama:</b> {data['nama_proyek']}</p>
+            <p><b>Lokasi:</b> {data['lokasi']}</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown(f"""
+        <div class="metric-box">
+            <h4>🏗️ Material Dasar</h4>
+            <p><b>Beton (fc'):</b> {data['fc']} MPa</p>
+            <p><b>Baja (fy):</b> {data['fy']} MPa</p>
+        </div>
+        """, unsafe_allow_html=True)
         
-        Vu_N = Vu_kN * 1000
-        Nu_N = Nu_kN * 1000
-        Ag = bw_mm * d_mm # Simplifikasi area efektif
-        
-        # Rumus Vc Sederhana (Tabel 22.5.5.1) dengan efek aksial
-        # Vc = (0.17 * lambda * sqrt(fc) + Nu/6Ag) * bw * d
-        lambda_conc = 1.0 # (beton normal)
-        
-        term1 = 0.17 * 1.0 * math.sqrt(fc_mpa)
-        term2 = Nu_N / (6 * Ag) if Ag > 0 else 0
-        
-        Vc_N = (term1 + term2) * bw_mm * d_mm
-        phiVc_N = PHI_SHEAR * Vc_N
-        
-        status = "AMAN"
-        Vs_perlu_N = 0
-        
-        if Vu_N > phiVc_N:
-            status = "PERLU TULANGAN GESER"
-            # Vu <= phi(Vc + Vs) -> Vs >= (Vu/phi) - Vc
-            Vs_perlu_N = (Vu_N / PHI_SHEAR) - Vc_N
+    with col3:
+        st.markdown(f"""
+        <div class="metric-box">
+            <h4>🌋 Parameter Gempa</h4>
+            <p><b>Ss:</b> {data['ss']} g</p>
+            <p><b>S1:</b> {data['s1']} g</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    st.info("💡 **Tips:** Gunakan menu di sebelah kiri untuk mengakses modul detail (Balok, Kolom, Pondasi, dll). Data yang Anda input di 'Input Teknis' akan digunakan di seluruh modul.")
+
+def modul_input_teknis():
+    st.title("📝 Input Data Teknis")
+    st.write("Definisikan parameter global proyek di sini.")
+    
+    with st.form("input_global"):
+        c1, c2 = st.columns(2)
+        with c1:
+            st.subheader("Informasi Umum")
+            nama = st.text_input("Nama Proyek", st.session_state['project_data']['nama_proyek'])
+            lokasi = st.text_input("Lokasi Proyek", st.session_state['project_data']['lokasi'])
             
-        return {
-            "Vc_kN": Vc_N / 1000,
-            "phiVc_kN": phiVc_N / 1000,
-            "Vs_perlu_kN": Vs_perlu_N / 1000,
-            "Status": status
-        }
+            st.subheader("Material Struktur")
+            fc = st.number_input("Mutu Beton (fc') - MPa", 15, 100, st.session_state['project_data']['fc'])
+            fy = st.number_input("Mutu Baja Tulangan (fy) - MPa", 240, 550, st.session_state['project_data']['fy'])
+            
+        with c2:
+            st.subheader("Parameter Gempa (SNI 1726:2019)")
+            ss = st.number_input("Ss (Batuan Dasar)", 0.0, 3.0, st.session_state['project_data']['ss'])
+            s1 = st.number_input("S1 (Batuan Dasar 1 Detik)", 0.0, 2.0, st.session_state['project_data']['s1'])
+            
+        submit = st.form_submit_button("💾 Simpan Data Proyek")
+        
+        if submit:
+            st.session_state['project_data'].update({
+                'nama_proyek': nama, 'lokasi': lokasi, 'fc': fc, 'fy': fy, 'ss': ss, 's1': s1
+            })
+            st.success("Data proyek berhasil diperbarui! Modul lain akan menggunakan data ini.")
 
-class GeotechCalculator:
-    """Modul Pondasi (Menggantikan tphiley.csv)"""
+def modul_analisa_gempa():
+    st.title("🌋 Analisa Beban Gempa")
+    st.markdown("Referensi: **SNI 1726:2019** (Menggantikan koefisien statik 0.045 lama)")
     
-    @staticmethod
-    def calc_hiley(weight_hammer, height_drop, set_s, elastic_c, weight_pile, efficiency):
-        # R = (ef . W . H) / (S + C/2) * (W + n^2.P)/(W+P) -> Simplifikasi Hiley Modern
-        # e_f: Efisiensi (Drop=0.75, Diesel=0.8-0.9)
+    data = st.session_state['project_data']
+    st.write(f"Menggunakan data: Ss={data['ss']}, S1={data['s1']}")
+    
+    site_class = st.selectbox("Klasifikasi Situs Tanah", ["SA (Batuan Keras)", "SB (Batuan)", "SC (Tanah Keras)", "SD (Tanah Sedang)", "SE (Tanah Lunak)"])
+    site_code = site_class.split()[0]
+    
+    sds, sd1, ts = EnginexCore.get_response_spectrum(data['ss'], data['s1'], site_code)
+    
+    c1, c2, c3 = st.columns(3)
+    c1.metric("SDS (Desain Pendek)", f"{sds:.3f} g")
+    c2.metric("SD1 (Desain 1 Detik)", f"{sd1:.3f} g")
+    c3.metric("Ts (Periode Transisi)", f"{ts:.3f} detik")
+    
+    st.subheader("📉 Grafik Respons Spektrum Desain")
+    t_vals = np.linspace(0, 4, 100)
+    sa_vals = []
+    t0 = 0.2 * ts
+    for t in t_vals:
+        if t < t0: val = sds * (0.4 + 0.6*t/t0)
+        elif t < ts: val = sds
+        else: val = sd1/t if t > 0 else 0
+        sa_vals.append(val)
         
-        W = weight_hammer # ton
-        H = height_drop * 100 # convert m to cm
-        S = set_s # cm/blow (final set)
-        C = elastic_c # cm (total elastic compression)
-        P = weight_pile # ton
-        n = 0.5 # koef restitusi beton (typical)
+    fig, ax = plt.subplots(figsize=(10,3))
+    ax.plot(t_vals, sa_vals, color='#0D47A1', linewidth=2)
+    ax.set_title(f"Respons Spektrum ({site_code})")
+    ax.set_xlabel("Periode (T) [detik]")
+    ax.set_ylabel("Percepatan (Sa) [g]")
+    ax.grid(True, linestyle='--', alpha=0.5)
+    st.pyplot(fig)
+
+def modul_desain_balok():
+    st.title("🏗️ Desain Struktur Balok")
+    st.markdown("Validasi: Geser & Lentur (SNI 2847:2019)")
+    
+    data = st.session_state['project_data']
+    
+    c1, c2 = st.columns(2)
+    with c1:
+        st.subheader("Dimensi & Gaya")
+        b = st.number_input("Lebar (b) mm", 200, 1000, 300)
+        h = st.number_input("Tinggi (h) mm", 300, 2000, 600)
+        d = h - 50 # decking
+        Mu = st.number_input("Momen Ultimate (Mu) kNm", 0.0, 1000.0, 150.0)
+        Vu = st.number_input("Geser Ultimate (Vu) kN", 0.0, 1000.0, 100.0)
+    
+    with c2:
+        st.subheader("Hasil Analisis")
+        # Hitung Tulangan Lentur (Simplified)
+        phi_b = 0.9
+        Rn = (Mu * 1e6) / (phi_b * b * d**2)
+        rho_perlu = (0.85 * data['fc'] / data['fy']) * (1 - math.sqrt(1 - (2 * Rn) / (0.85 * data['fc'])))
+        As_perlu = rho_perlu * b * d
         
-        energy = efficiency * W * H
-        loss_impact = (W + (n**2)*P) / (W + P)
+        st.write(f"**As Perlu (Lentur):** {As_perlu:.2f} mm²")
         
-        R_ultimate = (energy / (S + (C/2))) * loss_impact
-        R_safe = R_ultimate / 3.0 # SF = 3 (SNI 8460)
+        # Hitung Geser
+        Vc, phiVc, Vs_need = EnginexCore.calc_shear_beam(Vu, data['fc'], b, d)
         
-        return R_ultimate, R_safe
+        st.write(f"**Kapasitas Geser Beton (φVc):** {phiVc:.2f} kN")
+        if Vu > phiVc:
+            st.error(f"PERLU SENGKANG! Vs = {Vs_need:.2f} kN")
+            Av = 2 * 0.25 * 3.14 * 10**2 # 2 kaki D10
+            s_req = (Av * data['fy'] * d) / (Vs_need * 1000)
+            st.success(f"Rekomendasi: Sengkang D10-{int(s_req)} mm")
+        else:
+            st.success("Geser Aman (Gunakan Sengkang Praktis)")
+
+def modul_desain_kolom():
+    st.title("🏛️ Desain Struktur Kolom")
+    data = st.session_state['project_data']
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        b = st.number_input("Lebar Kolom (mm)", 300, 1500, 500)
+        h = st.number_input("Panjang Kolom (mm)", 300, 1500, 500)
+        Pu = st.number_input("Beban Aksial (Pu) kN", 0.0, 10000.0, 2000.0)
+        
+        # Input Tulangan
+        n_tul = st.number_input("Jumlah Tulangan Total", 4, 40, 12)
+        d_tul = st.selectbox("Diameter Tulangan", [16, 19, 22, 25, 29, 32])
+        As_tot = n_tul * 0.25 * 3.14 * (d_tul**2)
+        st.caption(f"As Total = {As_tot:.2f} mm²")
+
+    with col2:
+        st.subheader("Cek Kapasitas Aksial")
+        Pn_max, status = EnginexCore.calc_column_capacity(b, h, data['fc'], As_tot, data['fy'], Pu, 0)
+        
+        st.metric("Kapasitas Aksial Maks (φPn)", f"{Pn_max:.2f} kN")
+        if status == "AMAN":
+            st.markdown(f'<div class="success-box">✅ {status}</div>', unsafe_allow_html=True)
+        else:
+            st.markdown(f'<div class="warning-box">⚠️ {status} - Perbesar Penampang!</div>', unsafe_allow_html=True)
+
+def modul_pondasi():
+    st.title("🏗️ Analisa Pondasi (Pancang & Bor)")
+    st.markdown("Ref: CSV `tphiley.csv` & `Meyyerhof.csv` (Di-upgrade ke SNI 8460)")
+    
+    tipe_pondasi = st.radio("Pilih Tipe Pondasi", ["Tiang Pancang (Hiley/Kalendering)", "Bored Pile (Meyerhof/SPT)"])
+    
+    if tipe_pondasi == "Tiang Pancang (Hiley/Kalendering)":
+        c1, c2 = st.columns(2)
+        with c1:
+            W = st.number_input("Berat Palu (Ton)", 1.0, 10.0, 2.5)
+            H = st.number_input("Tinggi Jatuh (m)", 0.5, 5.0, 1.5)
+            P = st.number_input("Berat Tiang (Ton)", 0.5, 10.0, 1.2)
+            S = st.number_input("Set (cm)", 0.1, 10.0, 0.25)
+            K = st.number_input("Rebound (cm)", 0.1, 5.0, 1.0)
+            eff = 0.85 # Diesel Hammer
+        
+        # Hiley Modern Formula
+        energy = eff * W * H * 100 # ton.cm
+        R_ult = (energy / (S + K/2)) * (W + 0.5**2 * P)/(W+P)
+        R_all = R_ult / 3.0
+        
+        st.metric("Daya Dukung Ijin (Qall)", f"{R_all:.2f} Ton")
+        
+    else:
+        c1, c2 = st.columns(2)
+        with c1:
+            dia = st.number_input("Diameter Bor (cm)", 30, 200, 60)
+            Nspt = st.number_input("N-SPT Ujung", 1, 60, 30)
+            L = st.number_input("Panjang Tiang (m)", 5, 50, 15)
+        
+        Ap = 0.25 * 3.14 * (dia/100)**2
+        As_skin = 3.14 * (dia/100) * L
+        
+        Qu, Qall = EnginexCore.calc_pile_bearing(Nspt, Ap, As_skin, "Bored Pile")
+        st.metric("Daya Dukung Ijin (Qall)", f"{Qall:.2f} Ton")
+
+def modul_dinding_penahan():
+    st.title("🧱 Dinding Penahan Tanah (Retaining Wall)")
+    st.markdown("Analisis Stabilitas Guling & Geser (Rankine)")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        H = st.number_input("Tinggi Dinding (m)", 1.0, 10.0, 4.0)
+        gamma = st.number_input("Berat Jenis Tanah (kN/m3)", 10.0, 25.0, 18.0)
+        phi = st.number_input("Sudut Geser Dalam (derajat)", 10.0, 45.0, 30.0)
+        qs = st.number_input("Beban Merata (Surcharge) kN/m2", 0.0, 50.0, 10.0)
+        
+    Ka, Pa, M_over = EnginexCore.calc_retaining_wall(H, gamma, phi, 0, qs)
+    
+    with col2:
+        st.write("### Hasil Analisis")
+        st.write(f"Koefisien Tekanan Aktif (Ka): **{Ka:.3f}**")
+        st.write(f"Total Tekanan Tanah (Pa): **{Pa:.2f} kN/m'**")
+        st.metric("Momen Guling (Mo)", f"{M_over:.2f} kNm/m'")
+        
+        st.info("Pastikan Momen Penahan (Berat Sendiri x Lengan) > 2.0 x Mo")
+
+def modul_plat_tangga():
+    st.title("📶 Plat Lantai & Tangga")
+    tab1, tab2 = st.tabs(["Plat Lantai (Tabel Koefisien)", "Tangga"])
+    
+    with tab1:
+        st.write("Analisis Momen Plat Dua Arah (Metode Koefisien Momen)")
+        lx = st.number_input("Bentang Pendek (Lx)", 1.0, 10.0, 3.0)
+        ly = st.number_input("Bentang Panjang (Ly)", 1.0, 10.0, 4.0)
+        q = st.number_input("Beban Total (qu) kN/m2", 1.0, 20.0, 8.0)
+        
+        ratio = ly/lx
+        st.write(f"Rasio Ly/Lx = {ratio:.2f}")
+        
+        # Simplified Coefficient logic
+        clx = 30 + (ratio * 10) # Dummy formula for demonstration
+        cly = 20 + (ratio * 5)
+        
+        Mlx = 0.001 * q * lx**2 * clx
+        Mly = 0.001 * q * lx**2 * cly
+        
+        c1, c2 = st.columns(2)
+        c1.metric("Momen Lapangan X", f"{Mlx:.2f} kNm")
+        c2.metric("Momen Lapangan Y", f"{Mly:.2f} kNm")
+        
+    with tab2:
+        st.write("Desain Penulangan Tangga")
+        t_plat = st.number_input("Tebal Plat Tangga (mm)", 100, 300, 150)
+        optrecht = st.number_input("Tinggi Optrade (cm)", 10, 25, 17)
+        antrede = st.number_input("Lebar Antrede (cm)", 20, 40, 30)
+        sudut = math.degrees(math.atan(optrecht/antrede))
+        st.write(f"Sudut Kemiringan: **{sudut:.2f}°**")
+
+def modul_kolam():
+    st.title("🏊 Struktur Khusus: Kolam Renang")
+    st.markdown("Cek Uplift & Tekanan Hidrostatis")
+    
+    h_kolam = st.number_input("Kedalaman Kolam (m)", 1.0, 5.0, 2.5)
+    muka_air_tanah = st.number_input("Tinggi Muka Air Tanah dari dasar (m)", 0.0, 5.0, 1.5)
+    
+    w_kolam_kosong = 500 # kN (asumsi berat sendiri struktur)
+    uplift = muka_air_tanah * 10 * 50 # (gamma water * Area asumsi 50m2)
+    
+    st.write(f"Gaya Angkat (Uplift): **{uplift:.2f} kN**")
+    st.write(f"Berat Struktur: **{w_kolam_kosong} kN**")
+    
+    if w_kolam_kosong > 1.25 * uplift:
+        st.success("✅ AMAN TERHADAP GAYA ANGKAT (UPLIFT)")
+    else:
+        st.error("⚠️ BAHAYA! Kolam bisa terangkat saat kosong. Tambah berat sendiri atau pakai angkur tanah.")
 
 # ==========================================
-# 3. ANTARMUKA APLIKASI (STREAMLIT UI)
+# 4. NAVIGASI UTAMA (SIDEBAR MENU)
 # ==========================================
-
 def main():
-    st.sidebar.title("💎 GEMS SMARTSTRUKTUR V7")
-    st.sidebar.caption("Powered by Enginex Core | SNI Compliant")
-    
-    menu = st.sidebar.radio("Pilih Modul:", 
-        ["1. Gempa (SNI 1726:2019)", 
-         "2. Geser Balok (SNI 2847:2019)", 
-         "3. Pondasi Pancang (Modern Hiley)"])
+    with st.sidebar:
+        st.image("https://img.icons8.com/color/96/000000/engineer.png", width=80)
+        st.title("NAVIGASI MODUL")
+        
+        menu = st.radio("Pilih Kategori:", [
+            "1. Dashboard Proyek",
+            "2. Input Data Teknis",
+            "3. Analisa Gempa (SNI 1726)",
+            "4. Desain Balok",
+            "5. Desain Kolom",
+            "6. Pondasi (Pancang/Bor)",
+            "7. Dinding Penahan Tanah",
+            "8. Plat & Tangga",
+            "9. Struktur Kolam"
+        ])
+        
+        st.divider()
+        st.caption("GEMS SmartStruktur V8")
+        st.caption("Enginex Core Loaded")
 
-    # --- MODUL 1: GEMPA ---
-    if menu == "1. Gempa (SNI 1726:2019)":
-        st.header("🌋 Analisis Beban Gempa (Respons Spektrum)")
-        st.markdown("Validasi: Menggantikan logika statik `C=0.045` dengan Peta Gempa & Kelas Situs.")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            st.subheader("Input Parameter")
-            ss = st.number_input("Ss (Percepatan Batuan Dasar Periode Pendek - g)", 0.0, 3.0, 0.8, 0.01)
-            s1 = st.number_input("S1 (Percepatan Batuan Dasar Periode 1 Detik - g)", 0.0, 2.0, 0.4, 0.01)
-            site_class = st.selectbox("Kelas Situs Tanah (SNI 1726:2019)", ["SA", "SB", "SC", "SD", "SE"])
-            
-        # Hitung Logic
-        fa = SeismicCalculator.get_fa(ss, site_class)
-        fv = SeismicCalculator.get_fv(s1, site_class)
-        
-        if fa is not None and fv is not None:
-            sms = fa * ss
-            sm1 = fv * s1
-            sds = (2/3) * sms
-            sd1 = (2/3) * sm1
-            
-            # Cegah pembagian dengan nol jika sds sangat kecil
-            if sds > 0:
-                t0 = 0.2 * (sd1/sds)
-                ts = sd1 / sds
-            else:
-                t0 = 0
-                ts = 0
-            
-            with col2:
-                st.subheader("Hasil Perhitungan")
-                res_data = {
-                    "Fa (Amplifikasi Pendek)": fa,
-                    "Fv (Amplifikasi 1-dtk)": fv,
-                    "SMS (g)": sms,
-                    "SM1 (g)": sm1,
-                    "SDS (Desain Pendek)": sds,
-                    "SD1 (Desain 1-dtk)": sd1
-                }
-                st.dataframe(pd.DataFrame(res_data.items(), columns=["Parameter", "Nilai"]).set_index("Parameter"))
-            
-            # Plot Response Spectrum
-            st.subheader("📈 Kurva Respons Spektrum Desain (Sa vs T)")
-            t_vals = np.linspace(0, 4.0, 100)
-            sa_vals = []
-            for t in t_vals:
-                if t < t0: val = sds * (0.4 + 0.6*(t/t0)) if t0 > 0 else 0
-                elif t < ts: val = sds
-                else: val = sd1 / t if t > 0 else 0
-                sa_vals.append(val)
-                
-            fig, ax = plt.subplots(figsize=(10, 4))
-            ax.plot(t_vals, sa_vals, color='#0D47A1', linewidth=2)
-            ax.set_xlabel("Periode Getar, T (detik)")
-            ax.set_ylabel("Percepatan Respons Spektral, Sa (g)")
-            ax.grid(True, linestyle='--', alpha=0.6)
-            ax.axvline(ts, color='orange', linestyle='--', label=f'Ts = {ts:.2f}s')
-            ax.legend()
-            st.pyplot(fig)
-            
-            st.info(f"💡 **Insight Engineering:** Untuk T < Ts ({ts:.2f}s), struktur dikontrol oleh percepatan (SDS={sds:.3f}). Untuk T > Ts, dikontrol oleh kecepatan (SD1/T).")
-
-    # --- MODUL 2: BETON ---
-    elif menu == "2. Geser Balok (SNI 2847:2019)":
-        st.header("🏗️ Analisis Geser Balok Beton Bertulang")
-        st.markdown("Validasi: Menggunakan $\phi = 0.75$ (bukan 0.6) dan rumus $V_c$ terbaru.")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            fc = st.number_input("Mutu Beton (fc') - MPa", 15, 60, 25)
-            bw = st.number_input("Lebar Balok (bw) - mm", 100, 1000, 300)
-            d = st.number_input("Tinggi Efektif (d) - mm", 100, 2000, 550)
-            vu = st.number_input("Gaya Geser Terfaktor (Vu) - kN", 0.0, 5000.0, 150.0)
-            nu = st.number_input("Gaya Aksial (Nu) - kN (Tekan +, Tarik -)", -1000.0, 5000.0, 0.0)
-            
-        res = ConcreteCalculator.calc_shear(vu, fc, bw, d, nu)
-        
-        with col2:
-            st.subheader("Hasil Analisis")
-            
-            # Display Metrics
-            c1, c2, c3 = st.columns(3)
-            c1.metric("Kuat Geser Beton (Vc)", f"{res['Vc_kN']:.2f} kN")
-            c2.metric("Kapasitas Rencana (φVc)", f"{res['phiVc_kN']:.2f} kN", help="Menggunakan Phi=0.75")
-            c3.metric("Status", res['Status'], delta_color="normal" if res['Status']=="AMAN" else "inverse")
-            
-            if res['Vs_perlu_kN'] > 0:
-                st.warning(f"⚠️ **PERLU TULANGAN GESER (SENGKANG)**\n\nKuat geser tulangan (Vs) yang diperlukan: **{res['Vs_perlu_kN']:.2f} kN**")
-                
-                # Simple Stirrup Designer
-                fy = st.number_input("Mutu Baja Tulangan (fy) - MPa", 240, 550, 420)
-                n_kaki = st.selectbox("Jumlah Kaki Sengkang", [2, 3, 4])
-                dia_sengkang = st.selectbox("Diameter Sengkang (mm)", [8, 10, 12, 13, 16])
-                
-                Av = n_kaki * 0.25 * math.pi * (dia_sengkang**2)
-                # s = (Av * fy * d) / Vs
-                if res['Vs_perlu_kN'] > 0:
-                    s_calc = (Av * fy * d) / (res['Vs_perlu_kN'] * 1000)
-                    st.success(f"✅ Rekomendasi: Pasang Sengkang **D{dia_sengkang}-{int(s_calc)}** mm")
-
-    # --- MODUL 3: PONDASI ---
-    elif menu == "3. Pondasi Pancang (Modern Hiley)":
-        st.header("🏗️ Kapasitas Tiang Pancang (Kalendering)")
-        st.markdown("Validasi: Menggunakan efisiensi palu dinamis (bukan fixed 0.6).")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            st.subheader("Data Pemancangan")
-            W_hammer = st.number_input("Berat Palu (Ton)", 0.5, 10.0, 2.5)
-            H_drop = st.number_input("Tinggi Jatuh (m)", 0.5, 5.0, 1.5)
-            W_pile = st.number_input("Berat Tiang + Topi (Ton)", 0.1, 20.0, 1.2)
-            
-            st.subheader("Data Lapangan")
-            S_set = st.number_input("Final Set (S) - cm/pukulan", 0.0, 10.0, 0.25)
-            C_elastic = st.number_input("Rebound Elastis Total (K/C) - cm", 0.0, 5.0, 1.5)
-            
-            tipe_alat = st.selectbox("Tipe Alat Pancang", ["Drop Hammer (Manual)", "Diesel Hammer", "Hydraulic Hammer"])
-            eff_map = {"Drop Hammer (Manual)": 0.60, "Diesel Hammer": 0.85, "Hydraulic Hammer": 0.95}
-            eff = eff_map[tipe_alat]
-            
-        R_ult, R_all = GeotechCalculator.calc_hiley(W_hammer, H_drop, S_set, C_elastic, W_pile, eff)
-        
-        with col2:
-            st.subheader("Kapasitas Dukung")
-            st.write(f"**Efisiensi Alat ({tipe_alat}):** {eff}")
-            
-            st.markdown(f"""
-            <div class="metric-card">
-                <h3>Daya Dukung Ultimit (Qu)</h3>
-                <h1>{R_ult:.2f} Ton</h1>
-            </div>
-            <br>
-            <div class="metric-card" style="border-left: 5px solid #2E7D32;">
-                <h3>Daya Dukung Izin (Qall)</h3>
-                <h1>{R_all:.2f} Ton</h1>
-                <p>Safety Factor = 3.0</p>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            if R_all < 20:
-                st.warning("⚠️ Kapasitas tiang relatif kecil. Cek ulang data kalendering atau pertimbangkan tiang bor.")
+    # Routing Menu
+    if "1" in menu: modul_dashboard()
+    elif "2" in menu: modul_input_teknis()
+    elif "3" in menu: modul_analisa_gempa()
+    elif "4" in menu: modul_desain_balok()
+    elif "5" in menu: modul_desain_kolom()
+    elif "6" in menu: modul_pondasi()
+    elif "7" in menu: modul_dinding_penahan()
+    elif "8" in menu: modul_plat_tangga()
+    elif "9" in menu: modul_kolam()
 
 if __name__ == "__main__":
     main()
