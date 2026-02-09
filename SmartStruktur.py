@@ -330,26 +330,21 @@ with st.sidebar:
         st.rerun()
 
 # ==========================================
-# 5. MODE 1: AI CONSULTANT (DENGAN MODEL DINAMIS)
+# 5. MODE 1: AI CONSULTANT (STREAMING EFFECT)
 # ==========================================
 def render_ai_consultant():
     st.markdown('<div class="main-header">🤖 AI Structural Consultant</div>', unsafe_allow_html=True)
     
-    # Tampilkan model yang sedang aktif
+    # Tampilkan info model
     if st.session_state['api_key'] and st.session_state.get('selected_model_name'):
-         st.caption(f"Moda Operasi: Menggunakan Model **{st.session_state['selected_model_name']}**")
+         st.caption(f"Moda Operasi: Menggunakan Model **{st.session_state['selected_model_name']}** (High Speed)")
     
-    # Konfigurasi GenAI dilakukan di sidebar saat fetch model, tapi kita pastikan lagi di sini
     if st.session_state['api_key']:
-        try:
-            genai.configure(api_key=st.session_state['api_key'])
+        try: genai.configure(api_key=st.session_state['api_key'])
         except: pass
 
-    # -----------------------------------------------------------
-    # DEFINISI OTAK AI (PERSONA)
-    # -----------------------------------------------------------
+    # --- DEFINISI PERSONA (Gunakan yang GEMS Grandmaster tadi) ---
     personas = {
-        # --- 1. PERSONA "DEWA" (LEADER) ---
         "👑 The GEMS Grandmaster (All-in-One)": """
             ANDA ADALAH "THE GEMS GRANDMASTER" (Omniscient Project Director).
             Anda adalah manifestasi kecerdasan kolektif dari 4 Ahli Terbaik:
@@ -369,67 +364,70 @@ def render_ai_consultant():
 
             Gaya Bicara: Tegas, Strategis, Holistik, dan Solutif. Hindari jawaban ragu-ragu.
         """,
-
-        # --- 2. PERSONA SPESIALIS (JIKA PERLU DETAIL KHUSUS) ---
-        "🏗️ Ahli Struktur (Spesialis)": "Anda adalah Ahli Struktur Murni. Fokus HANYA pada perhitungan beban, momen, geser, dan detail penulangan sesuai SNI 2847 & 1726. Abaikan aspek harga, fokus pada keamanan maksimal.",
-        
-        "💰 Ahli RAB & Estimator": "Anda adalah Quantity Surveyor. Fokus HANYA pada volume material, analisa harga satuan (AHSP), dan cara menekan budget. Anda sangat pelit dan perhitungan.",
-        
-        "🪨 Ahli Geoteknik": "Anda adalah Geotechnical Engineer. Fokus HANYA pada data tanah (SPT, Sondir), daya dukung pondasi, dan kestabilan lereng. Anda sangat berhati-hati terhadap risiko longsor.",
-        
-        "👔 Manajemen Konstruksi": "Anda adalah Manajer Proyek. Fokus pada jadwal (Kurva S), kontrak, legalitas, dan manajemen SDM di lapangan."
+        "🏗️ Ahli Struktur": "Anda adalah Ahli Struktur Senior...",
+        "🪨 Ahli Geoteknik": "Anda adalah Geotechnical Engineer...",
+        "💰 Ahli RAB": "Anda adalah Quantity Surveyor..."
     }
-        
+    
     c1, c2 = st.columns([1, 2])
     with c1: selected_persona = st.selectbox("Pilih Ahli:", list(personas.keys()))
     with c2: uploaded_files = st.file_uploader("Upload Data (Gambar/PDF):", accept_multiple_files=True)
 
-    # Chat History
+    # Chat History Container
     chat_container = st.container()
     with chat_container:
         for chat in st.session_state['chat_history']:
             with st.chat_message(chat['role']): st.markdown(chat['content'])
 
-    prompt = st.chat_input("Tanya sesuatu...")
+    # Input User
+    prompt = st.chat_input("Konsultasikan proyek Anda di sini...")
+    
     if prompt:
-        # Validasi Keras: API Key dan Model harus terpilih
         if not st.session_state['api_key']:
-            st.error("⛔ API Key belum dimasukkan di sidebar!"); return
+            st.error("⛔ API Key belum dimasukkan!"); return
         if not st.session_state.get('selected_model_name'):
-             st.error("⛔ Tunggu sebentar, sedang memuat daftar model... atau cek API Key Anda."); return
+             st.error("⛔ Model belum dimuat. Tunggu sebentar..."); return
 
+        # 1. Tampilkan Chat User
         with st.chat_message("user"): st.markdown(prompt)
         st.session_state['chat_history'].append({"role": "user", "content": prompt})
         
+        # 2. Respon AI dengan Efek Mengetik
         with st.chat_message("assistant"):
-            with st.spinner(f"Ahli sedang berpikir menggunakan {st.session_state['selected_model_name']}..."):
-                try:
-                    # --- INI BAGIAN PENTING: GUNAKAN MODEL YG DIPILIH USER ---
-                    target_model_name = st.session_state['selected_model_name']
-                    model = genai.GenerativeModel(target_model_name, system_instruction=personas[selected_persona])
-                    
-                    content = [prompt]
-                    if uploaded_files:
-                        for f in uploaded_files:
-                            if f.type.startswith('image'): content.append(Image.open(f))
-                            elif f.type == 'application/pdf':
-                                pdf = PyPDF2.PdfReader(f)
-                                text = "".join([p.extract_text() for p in pdf.pages])
-                                content.append(f"Isi PDF: {text[:2000]}")
-                    
-                    response = model.generate_content(content)
-                    st.markdown(response.text)
-                    st.session_state['chat_history'].append({"role": "assistant", "content": response.text})
-                except Exception as e:
-                    # Error handling yang lebih informatif
-                    err_msg = str(e)
-                    if "404" in err_msg and "not found" in err_msg:
-                         st.error(f"Model '{target_model_name}' tidak ditemukan atau tidak didukung oleh API Key ini. Silakan pilih model lain di sidebar.")
-                    elif "429" in err_msg:
-                         st.warning("Terlalu banyak permintaan (Rate Limit). Tunggu sebentar lalu coba lagi.")
-                    else:
-                         st.error(f"Terjadi kesalahan AI: {err_msg}")
-
+            try:
+                target_model_name = st.session_state['selected_model_name']
+                model = genai.GenerativeModel(target_model_name, system_instruction=personas[selected_persona])
+                
+                content = [prompt]
+                if uploaded_files:
+                    for f in uploaded_files:
+                        if f.type.startswith('image'): content.append(Image.open(f))
+                        elif f.type == 'application/pdf':
+                            pdf = PyPDF2.PdfReader(f)
+                            text = "".join([p.extract_text() for p in pdf.pages])
+                            content.append(f"Isi PDF: {text[:2000]}")
+                
+                # --- LOGIKA STREAMING (KUNCI EFEK MENGETIK) ---
+                # Tambahkan stream=True
+                response_stream = model.generate_content(content, stream=True)
+                
+                # Fungsi Generator untuk Streamlit
+                def stream_data():
+                    for chunk in response_stream:
+                        if chunk.text:
+                            yield chunk.text
+                
+                # st.write_stream akan merender teks seolah diketik
+                # dan mengembalikan teks full di akhir
+                full_response = st.write_stream(stream_data)
+                
+                # Simpan jawaban lengkap ke memori
+                st.session_state['chat_history'].append({"role": "assistant", "content": full_response})
+                
+            except Exception as e:
+                err_msg = str(e)
+                if "404" in err_msg: st.error("Model tidak ditemukan. Ganti model di sidebar.")
+                else: st.error(f"Error AI: {err_msg}")
 # ==========================================
 # 6. MODE 2: ENGINEERING STUDIO (TITAN)
 # ==========================================
