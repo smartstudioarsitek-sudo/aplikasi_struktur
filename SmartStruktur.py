@@ -69,6 +69,10 @@ if 'project_data' not in st.session_state:
 if 'chat_history' not in st.session_state: st.session_state['chat_history'] = []
 if 'api_key' not in st.session_state: st.session_state['api_key'] = ""
 
+# --- [BARU] State untuk menyimpan daftar model dan model yang dipilih ---
+if 'gemini_models_list' not in st.session_state: st.session_state['gemini_models_list'] = []
+if 'selected_model_name' not in st.session_state: st.session_state['selected_model_name'] = "models/gemini-1.5-flash" # Default aman
+
 # State untuk menyimpan hasil perhitungan (Untuk Report)
 if 'calc_results' not in st.session_state:
     st.session_state['calc_results'] = {
@@ -244,20 +248,72 @@ class EnginexCore:
         return total
 
 # ==========================================
-# 4. SIDEBAR SETUP
+# 4. SIDEBAR SETUP (DENGAN MODEL SELECTOR)
 # ==========================================
 with st.sidebar:
     st.image("https://img.icons8.com/color/96/000000/engineer.png", width=70)
     st.title("ENGINEX TITAN")
     st.caption("AI + BIM + Structural Calculation")
     
-    st.markdown("### 🔑 API Key (AI Chat)")
-    if "GOOGLE_API_KEY" in st.secrets:
-        st.session_state['api_key'] = st.secrets["GOOGLE_API_KEY"]
-        st.success("✅ System Key Active")
+    st.markdown("### 🔑 API Key & Model AI")
+    
+    # 1. Input/Cek API Key
+    api_key_input = st.text_input("Google API Key:", type="password", value=st.session_state['api_key'], help="Masukkan API Key lalu tekan Enter untuk memuat daftar model.")
+    
+    # Jika ada input baru atau perubahan, update session state
+    if api_key_input and api_key_input != st.session_state['api_key']:
+        st.session_state['api_key'] = api_key_input
+        # Reset daftar model agar dimuat ulang dengan key baru
+        st.session_state['gemini_models_list'] = [] 
+
+    # Cek Secrets jika input kosong
+    if not st.session_state['api_key'] and "GOOGLE_API_KEY" in st.secrets:
+         st.session_state['api_key'] = st.secrets["GOOGLE_API_KEY"]
+
+    # 2. Logika Fetch Model & Dropdown
+    if st.session_state['api_key']:
+        try:
+            # Konfigurasi cuma sekali di sini untuk fetch model
+            genai.configure(api_key=st.session_state['api_key'])
+            
+            # Jika daftar model belum ada di memori, ambil dari Google
+            if not st.session_state['gemini_models_list']:
+                with st.spinner("Mengambil daftar model dari Google..."):
+                    models = []
+                    # Ambil semua model yg mendukung 'generateContent'
+                    for m in genai.list_models():
+                        if 'generateContent' in m.supported_generation_methods:
+                            models.append(m.name)
+                    # Sortir agar model terbaru biasanya di atas (heuristic)
+                    st.session_state['gemini_models_list'] = sorted(models, reverse=True)
+            
+            # Tampilkan Dropdown jika daftar berhasil diambil
+            if st.session_state['gemini_models_list']:
+                st.success("✅ API Key Valid. Model dimuat.")
+                
+                # Pastikan pilihan sebelumnya masih ada di daftar baru, jika tidak reset ke index 0
+                current_index = 0
+                if st.session_state['selected_model_name'] in st.session_state['gemini_models_list']:
+                    current_index = st.session_state['gemini_models_list'].index(st.session_state['selected_model_name'])
+                
+                selected_model = st.selectbox(
+                    "🤖 Pilih Model Gemini:",
+                    st.session_state['gemini_models_list'],
+                    index=current_index,
+                    help="Pilih versi model AI yang ingin digunakan. Jika satu gagal, coba yang lain."
+                )
+                # Simpan pilihan user ke session state
+                st.session_state['selected_model_name'] = selected_model
+            else:
+                st.warning("API Key valid, tapi tidak ada model 'generateContent' yang ditemukan.")
+
+        except Exception as e:
+            st.error(f"Gagal memuat model. Cek API Key Anda.\nError: {e}")
+            st.session_state['gemini_models_list'] = [] # Reset jika gagal
     else:
-        input_key = st.text_input("Google API Key:", type="password", value=st.session_state['api_key'])
-        if input_key: st.session_state['api_key'] = input_key
+        st.info("👉 Masukkan API Key untuk melihat daftar model yang tersedia.")
+
+    st.markdown("---")
 
     # Global Config Input
     with st.expander("🛠️ Konfigurasi Proyek", expanded=False):
@@ -267,26 +323,33 @@ with st.sidebar:
 
     app_mode = st.radio("Mode Aplikasi:", ["🤖 AI Consultant", "🏗️ Engineering Studio"])
     
-    if st.button("🧹 Reset Data"):
+    if st.button("🧹 Reset Data & Chat"):
         st.session_state['chat_history'] = []
+        # Optional: reset model selection too if needed
+        # st.session_state['gemini_models_list'] = []
         st.rerun()
 
 # ==========================================
-# 5. MODE 1: AI CONSULTANT
+# 5. MODE 1: AI CONSULTANT (DENGAN MODEL DINAMIS)
 # ==========================================
 def render_ai_consultant():
     st.markdown('<div class="main-header">🤖 AI Structural Consultant</div>', unsafe_allow_html=True)
     
-    # Configure GenAI
+    # Tampilkan model yang sedang aktif
+    if st.session_state['api_key'] and st.session_state.get('selected_model_name'):
+         st.caption(f"Moda Operasi: Menggunakan Model **{st.session_state['selected_model_name']}**")
+    
+    # Konfigurasi GenAI dilakukan di sidebar saat fetch model, tapi kita pastikan lagi di sini
     if st.session_state['api_key']:
         try:
             genai.configure(api_key=st.session_state['api_key'])
         except: pass
 
     personas = {
-        "🏗️ Ahli Struktur": "Anda adalah Ahli Struktur Senior...",
-        "👑 The Grandmaster": "Anda adalah Project Director...",
-        "💰 Ahli RAB": "Anda adalah Quantity Surveyor..."
+        "🏗️ Ahli Struktur": "Anda adalah Ahli Struktur Senior. Fokus pada perhitungan, SNI beton/baja, dan analisis gaya. Jawab dengan teknis, gunakan rumus jika perlu.",
+        "👑 The Grandmaster": "Anda adalah Project Director (Omniscient). Gabungkan aspek teknis, biaya (RAB), hukum kontrak (FIDIC), dan manajemen risiko. Jawab strategis dan menyeluruh.",
+        "💰 Ahli RAB & Estimator": "Anda adalah Quantity Surveyor Senior. Fokus pada volume, analisa harga satuan (AHSP), dan efisiensi biaya material. Jawab dengan tabel atau rincian biaya.",
+        "🪨 Ahli Geoteknik": "Fokus pada mekanika tanah, daya dukung pondasi, kestabilan lereng/talud. Jawab dengan parameter tanah (c, phi, gamma)."
     }
     
     c1, c2 = st.columns([1, 2])
@@ -294,21 +357,29 @@ def render_ai_consultant():
     with c2: uploaded_files = st.file_uploader("Upload Data (Gambar/PDF):", accept_multiple_files=True)
 
     # Chat History
-    for chat in st.session_state['chat_history']:
-        with st.chat_message(chat['role']): st.markdown(chat['content'])
+    chat_container = st.container()
+    with chat_container:
+        for chat in st.session_state['chat_history']:
+            with st.chat_message(chat['role']): st.markdown(chat['content'])
 
     prompt = st.chat_input("Tanya sesuatu...")
     if prompt:
+        # Validasi Keras: API Key dan Model harus terpilih
         if not st.session_state['api_key']:
-            st.error("Masukkan API Key dulu!"); return
+            st.error("⛔ API Key belum dimasukkan di sidebar!"); return
+        if not st.session_state.get('selected_model_name'):
+             st.error("⛔ Tunggu sebentar, sedang memuat daftar model... atau cek API Key Anda."); return
 
         with st.chat_message("user"): st.markdown(prompt)
         st.session_state['chat_history'].append({"role": "user", "content": prompt})
         
         with st.chat_message("assistant"):
-            with st.spinner("Thinking..."):
+            with st.spinner(f"Ahli sedang berpikir menggunakan {st.session_state['selected_model_name']}..."):
                 try:
-                    model = genai.GenerativeModel("gemini-1.5-flash", system_instruction=personas[selected_persona])
+                    # --- INI BAGIAN PENTING: GUNAKAN MODEL YG DIPILIH USER ---
+                    target_model_name = st.session_state['selected_model_name']
+                    model = genai.GenerativeModel(target_model_name, system_instruction=personas[selected_persona])
+                    
                     content = [prompt]
                     if uploaded_files:
                         for f in uploaded_files:
@@ -322,7 +393,14 @@ def render_ai_consultant():
                     st.markdown(response.text)
                     st.session_state['chat_history'].append({"role": "assistant", "content": response.text})
                 except Exception as e:
-                    st.error(f"Error AI: {e}")
+                    # Error handling yang lebih informatif
+                    err_msg = str(e)
+                    if "404" in err_msg and "not found" in err_msg:
+                         st.error(f"Model '{target_model_name}' tidak ditemukan atau tidak didukung oleh API Key ini. Silakan pilih model lain di sidebar.")
+                    elif "429" in err_msg:
+                         st.warning("Terlalu banyak permintaan (Rate Limit). Tunggu sebentar lalu coba lagi.")
+                    else:
+                         st.error(f"Terjadi kesalahan AI: {err_msg}")
 
 # ==========================================
 # 6. MODE 2: ENGINEERING STUDIO (TITAN)
@@ -486,7 +564,7 @@ else:
 st.markdown("---")
 st.markdown("""
 <div style="text-align: center; color: #aaa; font-size: 12px;">
-    ENGINEX TITAN SUITE v10.0 | AI • Structural • Geotech • Cost <br>
+    ENGINEX TITAN SUITE v10.1 | AI Model Selector Enabled <br>
     Integrated by The Enginex Architect | © 2026
 </div>
 """, unsafe_allow_html=True)
