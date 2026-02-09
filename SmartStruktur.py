@@ -108,7 +108,7 @@ class ConcreteCalculator:
         
         # Rumus Vc Sederhana (Tabel 22.5.5.1) dengan efek aksial
         # Vc = (0.17 * lambda * sqrt(fc) + Nu/6Ag) * bw * d
-        lambda_conc = 1.0 (beton normal)
+        lambda_conc = 1.0 # (beton normal)
         
         term1 = 0.17 * 1.0 * math.sqrt(fc_mpa)
         term2 = Nu_N / (6 * Ag) if Ag > 0 else 0
@@ -188,8 +188,14 @@ def main():
             sm1 = fv * s1
             sds = (2/3) * sms
             sd1 = (2/3) * sm1
-            t0 = 0.2 * (sd1/sds)
-            ts = sd1 / sds
+            
+            # Cegah pembagian dengan nol jika sds sangat kecil
+            if sds > 0:
+                t0 = 0.2 * (sd1/sds)
+                ts = sd1 / sds
+            else:
+                t0 = 0
+                ts = 0
             
             with col2:
                 st.subheader("Hasil Perhitungan")
@@ -208,9 +214,9 @@ def main():
             t_vals = np.linspace(0, 4.0, 100)
             sa_vals = []
             for t in t_vals:
-                if t < t0: val = sds * (0.4 + 0.6*(t/t0))
+                if t < t0: val = sds * (0.4 + 0.6*(t/t0)) if t0 > 0 else 0
                 elif t < ts: val = sds
-                else: val = sd1 / t
+                else: val = sd1 / t if t > 0 else 0
                 sa_vals.append(val)
                 
             fig, ax = plt.subplots(figsize=(10, 4))
