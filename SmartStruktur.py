@@ -1,37 +1,308 @@
-LAPORAN AUDIT TEKNIS DAN VALIDASI KOMPREHENSIF: TRANSISI SISTEM SMARTSTRUKTUR (V1–V6) DARI LOGIKA LEGACY CSV MENUJU ARSITEKTUR BERBASIS WEB YANG KEPATUHAN TERHADAP SNI TERBARU1. Pendahuluan: Mandat Validasi Civil-Dev dan Status GEMS GrandmasterLaporan ini disusun sebagai respon terhadap direktif strategis untuk melakukan validasi forensik terhadap ekosistem perangkat lunak "SmartStruktur". Sebagai Civil-Dev Validator dan pemegang otoritas GEMS Grandmaster, evaluasi ini tidak hanya sekadar pemeriksaan kode, melainkan sebuah audit kepatuhan struktural yang mendalam. Tujuannya adalah untuk menentukan apakah antarmuka HTML versi 1 hingga 6, yang telah dikembangkan dengan arsitektur web modern, memiliki integritas logika teknik sipil yang memadai untuk menggantikan sistem legacy berbasis Excel/CSV yang selama ini digunakan.Dalam era transformasi digital konstruksi 2025/2026, integritas data dan kepatuhan terhadap standar nasional (SNI) adalah parameter non-negosiasi. Infrastruktur sipil tidak mentolerir kesalahan perhitungan; satu desimal yang meleset dalam koefisien gempa atau reduksi kekuatan geser dapat berimplikasi pada kegagalan katastropik. Oleh karena itu, analisis ini membedah setiap baris kode HTML dan setiap sel data CSV untuk mengidentifikasi "utang teknis" (technical debt) dan "utang regulasi" yang tersembunyi di dalam sistem.Tinjauan ini menemukan adanya dikotomi yang tajam: di satu sisi, terdapat antarmuka pengguna (UI) HTML V6 "Omni-X Edition" yang canggih dan modular; di sisi lain, terdapat mesin perhitungan (logic engine) yang bersumber dari file CSV yang mengandung parameter-parameter usang (obsolete), yang merujuk pada era peraturan pra-2012 bahkan PBI 1971. Laporan ini akan menguraikan secara rinci mengapa sistem ini, dalam kondisi saat ini, belum siap untuk deployment tanpa reformasi algoritmik total, serta memberikan peta jalan teknis untuk mencapai status kepatuhan SNI 1726:2019 (Gempa), SNI 2847:2019 (Beton), dan SNI 8460:2017 (Geoteknik).2. Bedah Arsitektur Perangkat Lunak: Evolusi HTML V1–V6 dan Defisit LogikaTransformasi dari kalkulasi berbasis spreadsheet menuju aplikasi web klien (client-side web app) adalah langkah krusial dalam modernisasi alat bantu teknik sipil. Analisis terhadap keenam versi file HTML "SmartStruktur" mengungkapkan evolusi pemikiran desain yang signifikan, namun juga menyingkap kekosongan fungsional yang kritis.2.1 Evolusi Antarmuka dan ModularitasPerjalanan pengembangan dari versi awal hingga "Omni-X Edition" menunjukkan peningkatan maturitas dalam pengorganisasian modul teknik sipil.Pada tahap awal, Versi 1 (Ultimate Edition) meletakkan dasar dengan memisahkan "Definisi & Beban" dari "Analisis Struktur". Penggunaan variabel CSS (--primary, --accent) menunjukkan kesadaran akan identitas visual yang konsisten, namun logika interaktivitasnya masih terbatas pada penyembunyian dan pemunculan elemen DOM (display: none / block). Ini adalah langkah awal yang baik, namun belum mencerminkan kompleksitas ketergantungan antar-modul, misalnya bagaimana output berat seismik ($W_t$) dari modul beban seharusnya secara otomatis menjadi input bagi modul gempa.Versi 2 (Omni Edition) membawa paradigma baru dengan memperkenalkan kontrol stabilitas global, yaitu "Drift & Eksentrisitas". Ini menandakan pergeseran dari sekadar mendesain elemen per elemen (balok, kolom) menjadi analisis perilaku bangunan secara keseluruhan. Integrasi Chart.js di bagian header mengindikasikan ambisi untuk memvisualisasikan respons spektrum, meskipun implementasi datanya belum terlihat pada potongan kode yang tersedia.Puncak evolusi saat ini, Versi 6 (Omni-X Edition), menawarkan kerangka kerja yang paling komprehensif. Sidebar navigasinya memetakan 29 modul yang mencakup hampir seluruh spektrum desain gedung, mulai dari "Analisis Beban" hingga "Jembatan" dan "Kolam". Struktur ini sangat ideal untuk sebuah Super-App teknik sipil. Pengelompokan kategori menjadi "A. Beban & Atap", "B. Gempa & Stabilitas", hingga "F. Struktur Khusus" menunjukkan pemahaman mendalam tentang alur kerja (workflow) insinyur struktur. Namun, keindahan arsitektur ini menyamarkan bahaya laten: ketidakhadiran mesin hitung itu sendiri.2.2 Fenomena "Black Box" dan Ketergantungan Data LegacyTemuan paling kritis dari audit kode HTML  adalah absennya blok <script> yang berisi logika eksekusi. Fungsi-fungsi seperti calcGempa(), calcBalok(), atau calcMeyer() dipanggil melalui event handler onclick, namun deklarasi fungsi tersebut tidak ditemukan dalam dokumen.Ini menciptakan skenario "Black Box". Asumsi dasar dari migrasi ini adalah bahwa fungsi-fungsi JavaScript tersebut akan ditulis untuk membaca dan memproses data dari file CSV yang diunggah. Di sinilah letak risiko terbesarnya. Jika pengembang (Civil-Dev) memprogram fungsi JavaScript untuk secara buta mengambil nilai koefisien dari CSV tanpa validasi ulang, maka aplikasi web yang "modern" ini hanya akan menjadi kulit baru untuk logika kuno yang berbahaya.Sebagai contoh, validasi terhadap file lateralgempa.csv  menunjukkan bahwa nilai Gaya Geser Dasar ($V$) dihitung menggunakan koefisien statik $C = 0.045$. Jika fungsi calcGempa() di HTML V6 hanya membaca sel ini dari CSV dan menampilkannya ke UI, maka aplikasi tersebut secara efektif melanggar SNI 1726:2019 yang mewajibkan perhitungan respons spektrum dinamis berdasarkan lokasi spesifik ($S_S, S_1$) dan klasifikasi situs tanah. HTML V6 menyediakan input field untuk $S_S$ dan $S_1$ , namun jika backend-nya masih terikat pada logika CSV statik, maka akan terjadi disonansi kognitif antara apa yang diinput pengguna dan apa yang dihasilkan sistem.3. Audit Logika Gempa: Benturan Antara Koefisien Statik dan Respons Spektrum (RSA)Dalam hierarki keselamatan bangunan di Indonesia, kepatuhan terhadap standar gempa adalah prioritas tertinggi. Indonesia, yang terletak di Ring of Fire, terus memperbarui peta bahaya gempanya, dengan pembaruan signifikan pada 2012, 2019, dan proyeksi pembaruan peta gempa nasional pada 2025/2026. Analisis terhadap data CSV menunjukkan bahwa logika yang digunakan tertinggal beberapa generasi dari standar saat ini.3.1 Dekonstruksi Logika Legacy (lateralgempa.csv & Gayagempa.csv)File lateralgempa.csv  dan Gayagempa.csv  menyimpan metodologi perhitungan gempa yang sangat simplistik. Formula yang diekstrak dari data tersebut adalah:$$V = C \cdot I \cdot K \cdot W_t$$Dimana:$C$ (Koefisien Gempa Dasar) dipatok mati pada angka 0.045.$I$ (Faktor Keutamaan) = 1.0.$K$ (Faktor Tipe Struktur) = 1.0.$W_t$ (Berat Total Bangunan) = 12.008.014 kg.Analisis Forensik Kesalahan:Metode "Koefisien Gempa Dasar" ($C$) ini adalah karakteristik dari peraturan SNI 03-1726-2002 atau bahkan PPTGIUG 1983. Dalam standar lama tersebut, Indonesia dibagi menjadi beberapa wilayah gempa (Wilayah 1–6) dan nilai $C$ didapat dari grafik sederhana berdasarkan waktu getar alami ($T$).Penggunaan nilai konstan 0.045 untuk kedua arah (X dan Y) tanpa mempedulikan perbedaan periode getar ($T_x = 1.187s$, $T_y = 1.202s$) adalah indikasi kuat bahwa perhitungan ini tidak lagi relevan. Lebih fatal lagi, data ini mengabaikan parameter percepatan batuan dasar ($PGA$) dan amplifikasi tanah yang menjadi jantung dari regulasi modern.3.2 Imperatif SNI 1726:2019 dan Peta Gempa 2025/2026Berdasarkan SNI 1726:2019, perhitungan beban gempa tidak lagi boleh menggunakan koefisien statik tunggal. Prosesnya harus melalui tahapan analisis probabilistik yang ketat :Parameter Percepatan Batuan Dasar ($S_S$ dan $S_1$):
-HTML V6  telah menyediakan input untuk $S_S$ (Periode Pendek) dan $S_1$ (Periode 1 Detik). Namun, logika CSV tidak memiliki tempat untuk variabel ini. Peta gempa Indonesia terbaru menunjukkan peningkatan nilai $S_S$ dan $S_1$ di berbagai kota besar seperti Palu, Jayapura, dan Bengkulu akibat akumulasi data seismik baru. Menggunakan logika lama pada peta gempa baru adalah tindakan yang tidak kompatibel.Klasifikasi Situs Tanah (Site Class) dan Amplifikasi ($F_a, F_v$):SNI 1726:2019 memperkenalkan tabel koefisien situs $F_a$ dan $F_v$ yang jauh lebih kompleks dibandingkan pendahulunya. Nilai $F_a$ dan $F_v$ tidak lagi linear, melainkan bergantung pada intensitas gempa ($S_S$).Untuk Tanah Lunak (SE), amplifikasi bisa sangat besar pada gempa kecil, namun menurun pada gempa besar karena non-linearitas tanah.Tabel $F_a$ dan $F_v$ pada SNI 1726:2019 memiliki rentang nilai baru, termasuk untuk $S_S \ge 1.5g$ dan $S_1 \ge 0.6g$ yang sebelumnya tidak ada di SNI 2012.Temuan Kesalahan: Data CSV sama sekali tidak memuat tabel interpolasi $F_a/F_v$. Jika HTML V6 hanya menampilkan dropdown "Kelas Situs" tanpa mesin interpolasi di belakangnya, maka perhitungan $S_{DS}$ dan $S_{D1}$ akan gagal.Koefisien Respons Seismik ($C_s$):Pengganti variabel $C$ dalam standar modern adalah $C_s$, yang dihitung dengan rumus:$$C_s = \frac{S_{DS}}{R / I_e}$$Dengan batasan-batasan ketat:$$C_{s,min} = 0.044 S_{DS} I_e \ge 0.01$$Dan untuk periode panjang ($T > T_L$):$$C_s = \frac{S_{D1} \cdot T_L}{T^2 (R/I_e)}$$Data CSV yang menggunakan $C=0.045$ mengabaikan peran Faktor Reduksi Gempa ($R$). Untuk sistem Rangka Pemikul Momen Khusus (SRPMK), nilai $R$ adalah 8. Dengan mengabaikan $R$, beban gempa bisa jadi terlalu konservatif (mahal) atau justru tidak aman jika daktilitas struktur tidak diperhitungkan dengan benar.3.3 Rekomendasi Perbaikan Logika GempaUntuk menggantikan Excel Anda, HTML V6 harus membuang ketergantungan pada lateralgempa.csv. Anda harus menulis ulang fungsi calcGempa() di JavaScript dengan algoritma berikut:Input: Ambil $S_S$, $S_1$, dan Kelas Situs (SA-SF) dari UI.Database Internal: Tanamkan Tabel 6 dan Tabel 7 SNI 1726:2019  ke dalam array JavaScript atau JSON.Fungsi Interpolasi: Buat fungsi helper getSiteCoefficient(value, table) yang melakukan interpolasi linear otomatis. Ini krusial karena jarang sekali nilai $S_S$ pas di angka tabel (misal $S_S=0.85$).Hitung Spektrum Desain:$$S_{MS} = F_a \cdot S_S; \quad S_{M1} = F_v \cdot S_1$$$$S_{DS} = \frac{2}{3} S_{MS}; \quad S_{D1} = \frac{2}{3} S_{M1}$$Konstruksi Kurva: Plot kurva Respons Spektrum ($S_a$ vs $T$) menggunakan chart.js yang sudah tersedia di HTML. Ini memberikan validasi visual yang tidak dimiliki Excel lama.4. Audit Struktur Beton: Bahaya Reduksi Kekuatan ($\phi$) yang UsangAnalisis terhadap modul desain elemen beton (balok dan kolom) mengungkap penggunaan parameter keselamatan yang sudah tidak berlaku, yang berpotensi menghasilkan desain yang boros atau menyalahi aturan keselamatan geser.4.1 Faktor Reduksi Kekuatan Geser ($\phi$) dalam CSVPemeriksaan mendalam pada file geser balok.csv  dan geser kolom.csv  menemukan formula kapasitas geser tulangan ($V_s$) sebagai berikut:$$V_s = \frac{V_u}{0.6} - V_c$$Angka 0.6 di sini adalah faktor reduksi kekuatan ($\phi$) untuk geser. Angka ini adalah artefak sejarah dari peraturan beton lama (PBI 1971 atau SK SNI T-15-1991).Koreksi SNI 2847:2019:
-Berdasarkan SNI 2847:2019 (yang mengadopsi ACI 318-14/19), faktor reduksi kekuatan untuk geser ($\phi_{shear}$) adalah 0.75.Implikasi Kesalahan:Menggunakan $\phi=0.6$ alih-alih $0.75$ berarti Anda mereduksi kapasitas nominal sebesar 40% (1/0.6 = 1.66) padahal standar modern hanya mensyaratkan reduksi 33% (1/0.75 = 1.33).Dampak Ekonomi: Desain menjadi terlalu konservatif. Anda akan memasang tulangan sengkang (begel) jauh lebih banyak dari yang dibutuhkan, memboroskan biaya besi beton secara signifikan.Dampak Teknis: Meskipun "lebih aman" dalam konteks kapasitas, ketidaksesuaian ini melanggar prinsip Strong Column Weak Beam dan hierarki keruntuhan yang diatur dalam desain kapasitas modern. Kekuatan geser yang berlebihan bisa mengubah mode kegagalan yang diharapkan.4.2 Evolusi Rumus Kekuatan Geser Beton ($V_c$)Pada file geser kolom.csv , kapasitas geser beton dihitung dengan mempertimbangkan gaya aksial:$$V_c = \left( 1 + \frac{N_u}{14 A_g} \right) \left( \frac{1}{6} \sqrt{f_c'} b_w d \right)$$Rumus ini klasik dan valid menurut SNI 2847:2013 (Persamaan 11-4 ACI 318M-11). Namun, insinyur modern harus waspada terhadap pembaruan di SNI 2847:2019.Dalam standar terbaru (ACI 318-19), perhitungan $V_c$ untuk elemen non-prategang menjadi lebih kompleks, terutama dengan diperkenalkannya Faktor Efek Ukuran ($\lambda_s$) untuk komponen struktur tanpa tulangan geser, dan integrasi rasio tulangan memanjang ($\rho_w$) ke dalam rumus $V_c$.$$V_c = (0.17 \lambda \sqrt{f_c'} + \frac{N_u}{6 A_g}) b_w d$$ (Rumus Sederhana SNI 2847:2019 Tabel 22.5.5.1)Meskipun rumus lama di CSV masih sering diterima untuk desain praktis sederhana, sebagai "GEMS Grandmaster", sistem Anda harus mengakomodasi nuansa baru ini, terutama untuk struktur High-Rise dimana efisiensi $V_c$ sangat mempengaruhi densitas tulangan sengkang di daerah sendi plastis.4.3 Analisis Balok dan Torsi (geser&torsiBlk.csv)File geser&torsiBlk.csv menunjukkan upaya untuk menggabungkan geser dan torsi. Logika yang digunakan menjumlahkan tegangan geser murni ($T_{bu}$) dan tegangan geser akibat torsi ($T_{bu}'$).$$T_{total} = T_{bu} + T_{bu}'$$Material yang dirujuk adalah Baja U24 dan Beton K175.Isu Material: Mutu beton K175 ($f_c' \approx 14.5$ MPa) sudah sangat jarang digunakan untuk struktur tahan gempa modern yang minimal mensyaratkan $f_c' = 21$ MPa (K-250) atau bahkan lebih tinggi. HTML V6 harus membatasi input pengguna agar tidak menggunakan mutu beton di bawah standar minimum SNI 2847:2019 Pasal 19.2.1.Interaksi Geser-Torsi: SNI 2847:2019 Pasal 22.7 mengatur interaksi geser dan torsi dengan rumus akar kuadrat jumlah kuadrat (SRSS) untuk tegangan pada penampang berongga, atau penjumlahan langsung pada penampang solid. Validasi harus dilakukan untuk memastikan apakah logika CSV membedakan antara ambang batas torsi retak ($T_{cr}$) dan torsi keseimbangan. Data CSV hanya menunjukkan input $T_u$ dan $T_{cr}$ tanpa logika pengecekan ambang batas $\phi T_{th}$ (Threshold Torsion).5. Audit Geoteknik: Pondasi dan Struktur BawahBagian geoteknik dalam sistem ini mencakup analisis pondasi tiang pancang (Hiley), daya dukung statis (Meyerhof), dan pelat dasar (Westergaard).5.1 Rumus Hiley dan Faktor Efisiensi (tphiley.csv)File tphiley.csv  menyajikan perhitungan kapasitas tiang pancang dinamis. Formula yang diekstrak dari data adalah varian Rumus Hiley yang dimodifikasi:$$R = \frac{e_f \cdot W \cdot H}{S + K_{total}} \cdot \frac{W}{W + P}$$Dimana:$e_f$ (Efisiensi Palu) = 0.6 (Drop Hammer).$n$ (Restitusi) = 0.5.$S$ = Penetrasi per pukulan.$K$ = Kompresi elastis total ($C_1 + C_2 + C_3$).Koreksi Kritis:Data CSV menggunakan efisiensi palu 0.6 yang tipikal untuk Drop Hammer manual tua. Dalam proyek modern yang menggunakan Diesel Hammer atau Hydraulic Hammer, efisiensi ini jauh lebih tinggi (0.8 - 0.95). Mengunci nilai 0.6 dalam logika aplikasi akan menyebabkan over-design pada panjang pemancangan atau jumlah tiang.HTML V6 harus menyediakan opsi pemilihan tipe alat pancang (Drop, Diesel, Hydraulic) yang secara otomatis mengubah variabel $e_f$ dalam rumus JavaScript.Selain itu, SNI 8460:2017 (Persyaratan Perancangan Geoteknik) menekankan bahwa rumus dinamis seperti Hiley hanya boleh digunakan untuk estimasi awal atau kontrol lapangan, bukan sebagai pengganti uji beban statis (Static Loading Test) atau PDA Test, terutama untuk tiang friksi di tanah lempung. Disclaimer ini harus ditampilkan di UI HTML.5.2 Daya Dukung Meyerhof (Meyyerhof.csv)Logika daya dukung aksial dalam CSV  menggunakan:$$Q_{ult} = 40 N_b A_b + 0.2 N_{avg} A_s$$Faktor Keamanan (SF): Menggunakan SF = 3.0.Limitasi $N_b$: Dibatasi maksimal 40.Validasi:
-Formula ini adalah pendekatan empiris standar yang masih diterima secara luas di Indonesia untuk pondasi tiang bor dan pancang di tanah pasir/lanau. Penggunaan SF = 3.0 juga sesuai dengan rekomendasi SNI 8460:2017 untuk pondasi dalam tanpa uji beban skala penuh. Pembatasan nilai N-SPT maksimal 40 juga merupakan praktik yang baik (best practice) untuk menghindari overestimasi kapasitas pada lapisan tanah sangat padat atau berbatu. Bagian ini relatif aman, namun harus dikonversi ke JavaScript dengan benar.5.3 Analisis Lateral dan UpliftFile LATERALTIANG.csv  dan LIFT.csv menunjukkan perhitungan sederhana untuk gaya lateral dan cabut (uplift).Lateral: Tampaknya hanya membagi gaya lateral total ($H$) dengan jumlah tiang ($n$). Ini mengabaikan kekakuan relatif tiang dan interaksi tanah-tiang (p-y curve). Untuk kategori "Grandmaster", HTML V6 sebaiknya mengimplementasikan metode Broms atau setidaknya membedakan antara tiang ujung jepit (fixed head) dan sendi (free head).Uplift: Memperhitungkan berat sendiri pondasi dan tanah di atasnya. SNI 8460:2017 mensyaratkan SF untuk uplift minimal 1.5 hingga 2.0 tergantung durasi beban (gempa vs angin). Pastikan logika JavaScript menerapkan SF yang berbeda untuk kombinasi beban yang berbeda.6. Integrasi Biaya dan AHSP (Analisa Harga Satuan Pekerjaan)Meskipun fokus utama permintaan Anda adalah struktur, referensi ke SE Menteri PUPR No. 30 Tahun 2025  tentang AHSP terbaru tidak boleh diabaikan.Data CSV beban (beban.csv, bebange.csv) saat ini hanya berisi berat material (kg/m²). Tidak ada data harga. Untuk menjadi sistem yang "siap menggantikan Excel" secara holistik, HTML V6 perlu mengintegrasikan modul estimasi biaya.Isu: Koefisien tenaga kerja dan bahan dalam AHSP 2025 mungkin berbeda drastis dari asumsi lama akibat inflasi, teknologi baru, dan standar K3 (SMKK) yang kini wajib dihitung terpisah.Saran: Tambahkan modul CSV baru ahsp_2025.csv yang berisi koefisien terbaru, dan hubungkan dengan volume material yang dihasilkan dari perhitungan beton (balok/kolom) untuk menghasilkan RAB instan.7. Kesimpulan dan Peta Jalan PerbaikanSecara arsitektur, HTML GEMS MASTER PRO V6 adalah lompatan kuantum dari metode konvensional. Namun, secara substansi logika teknik sipil, sistem ini membawa beban masa lalu yang berat. Data CSV yang Anda unggah adalah cerminan dari praktik rekayasa era 1990-2000-an yang tidak lagi kompatibel dengan filosofi desain berbasis kinerja (performance-based design) yang dianut kode modern.Status Kesiapan: BELUM SIAP (NOT READY)Sistem ini tidak boleh digunakan untuk desain bangunan nyata sebelum dilakukan Bedah Jantung Algoritma.Ringkasan Defisiensi Kritis:Gempa: Menggunakan koefisien statik 0.045 (Kuno) vs Respons Spektrum Dinamis (SNI 1726:2019).Beton: Menggunakan $\phi_{geser} = 0.6$ (Boros/Kuno) vs $\phi_{geser} = 0.75$ (SNI 2847:2019).Material: Menggunakan referensi beton K-175 dan Baja U-24 yang sudah jarang relevan untuk struktur utama tahan gempa.Pondasi: Efisiensi palu Hiley terpaku pada 0.6, mengabaikan teknologi alat pancang modern.Rekomendasi Aksi (Action Plan):Refactoring JavaScript (Wajib): Jangan menulis kode JS yang hanya membaca sel CSV mentah. Tulis ulang rumus fisika tekniknya di dalam JavaScript. Gunakan CSV hanya sebagai database parameter material atau tabel profil baja, bukan sebagai database hasil perhitungan.Update Database Gempa: Buat database JSON yang berisi tabel $F_a$ dan $F_v$ sesuai SNI 1726:2019. Implementasikan algoritma interpolasi linear di JavaScript agar saat pengguna memasukkan $S_S=0.7$, sistem otomatis menghitung nilai antara $S_S=0.5$ dan $S_S=0.75$.Visualisasi Respons: Manfaatkan library chart.js di HTML V6 untuk menggambar kurva respons spektrum secara real-time saat pengguna mengubah input kelas situs tanah. Ini akan menjadi fitur "Grandmaster" yang sesungguhnya.Validasi Beban Hidup: Ubah logika reduksi beban hidup gempa dari hardcoded 0.3 menjadi variabel input (0.25 s/d 0.5) sesuai fungsi gedung (Gudang vs Rumah Tinggal), sesuai Pasal 7.4 SNI 1726:2019.Dengan melakukan perbaikan ini, SmartStruktur tidak hanya akan menggantikan Excel, tetapi akan menjadi platform validasi teknik sipil yang unggul, akurat, dan patuh hukum.8. Lampiran Teknis: Koreksi Algoritma JavaScriptBerikut adalah contoh implementasi logika yang benar untuk menggantikan data CSV yang salah:8.1 Koreksi Logika Geser Balok (SNI 2847:2019)JavaScriptfunction hitungGeserBalok(Vu, fc, bw, d) {
-    // KOREKSI 1: Phi shear updated from 0.6 to 0.75
-    const PHI_SHEAR = 0.75; 
-    
-    // Konversi satuan jika perlu (asumsi input N dan mm)
-    // Rumus Vc Sederhana (tanpa beban aksial)
-    // Vc = 0.17 * lambda * sqrt(fc) * bw * d
-    const lambda = 1.0; // Beton berat normal
-    const Vc = 0.17 * lambda * Math.sqrt(fc) * bw * d;
-    
-    const phiVc = PHI_SHEAR * Vc;
-    
-    let status = "Aman";
-    let Vs_perlu = 0;
-    
-    if (Vu > phiVc) {
-        status = "Perlu Tulangan Geser";
-        // Vs = (Vu - phi*Vc) / phi
-        Vs_perlu = (Vu - phiVc) / PHI_SHEAR;
+import streamlit as st
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import math
+
+# ==========================================
+# 1. KONFIGURASI HALAMAN & GAYA (UI/UX)
+# ==========================================
+st.set_page_config(
+    page_title="GEMS SmartStruktur V7",
+    page_icon="🏗️",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# Custom CSS untuk tampilan "Gagah" ala Grandmaster
+st.markdown("""
+    <style>
+    .main { background-color: #F8F9FA; }
+    h1 { color: #0D47A1; font-weight: 800; }
+    h2, h3 { color: #1565C0; }
+    .stButton>button {
+        background-color: #0D47A1; color: white; 
+        border-radius: 8px; font-weight: bold; width: 100%;
     }
+    .stButton>button:hover { background-color: #FF6F00; color: white; }
+    .metric-card {
+        background-color: white; padding: 20px; border-radius: 10px;
+        box-shadow: 2px 2px 10px rgba(0,0,0,0.1); border-left: 5px solid #0D47A1;
+    }
+    .warning-box {
+        background-color: #FFEBEE; padding: 15px; border-radius: 5px;
+        border: 1px solid #EF9A9A; color: #C62828;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+# ==========================================
+# 2. LIBRARY LOGIKA TEKNIK (ENGINEERING BRAIN)
+# ==========================================
+
+class SeismicCalculator:
+    """Modul Perhitungan Gempa SNI 1726:2019 (Menggantikan lateralgempa.csv)"""
     
-    return { Vc, phiVc, Vs_perlu, status };
-}
-8.2 Koreksi Interpolasi Koefisien Situs (SNI 1726:2019)JavaScriptfunction getSiteCoefficient(Ss, siteClass) {
-    // Contoh Data Tabel Fa SNI 1726:2019
-    const tableFa = {
-        "SD": { 0.25: 1.6, 0.5: 1.4, 0.75: 1.2, 1.0: 1.1, 1.25: 1.0 },
-        "SE": { 0.25: 2.5, 0.5: 1.7, 0.75: 1.2, 1.0: 0.9, 1.25: 0.9 }
-    };
+    @staticmethod
+    def get_fa(Ss, site_class):
+        # Tabel 6 SNI 1726:2019 (Interpolasi Linear)
+        data = {
+            'SA': {0.25: 0.8, 0.5: 0.8, 0.75: 0.8, 1.0: 0.8, 1.25: 0.8},
+            'SB': {0.25: 1.0, 0.5: 1.0, 0.75: 1.0, 1.0: 1.0, 1.25: 1.0},
+            'SC': {0.25: 1.2, 0.5: 1.2, 0.75: 1.1, 1.0: 1.0, 1.25: 1.0},
+            'SD': {0.25: 1.6, 0.5: 1.4, 0.75: 1.2, 1.0: 1.1, 1.25: 1.0},
+            'SE': {0.25: 2.5, 0.5: 1.7, 0.75: 1.2, 1.0: 0.9, 1.25: 0.9}
+        }
+        if site_class == 'SF': return None # Perlu analisis spesifik
+        
+        vals = data[site_class]
+        ss_keys = sorted(vals.keys())
+        
+        # Logika Interpolasi
+        if Ss <= ss_keys[0]: return vals[ss_keys[0]]
+        if Ss >= ss_keys[-1]: return vals[ss_keys[-1]]
+        
+        for i in range(len(ss_keys)-1):
+            if ss_keys[i] <= Ss <= ss_keys[i+1]:
+                x0, x1 = ss_keys[i], ss_keys[i+1]
+                y0, y1 = vals[x0], vals[x1]
+                return y0 + (Ss - x0) * (y1 - y0) / (x1 - x0)
+        return 1.0
+
+    @staticmethod
+    def get_fv(S1, site_class):
+        # Tabel 7 SNI 1726:2019
+        data = {
+            'SA': {0.1: 0.8, 0.2: 0.8, 0.3: 0.8, 0.4: 0.8, 0.5: 0.8},
+            'SB': {0.1: 1.0, 0.2: 1.0, 0.3: 1.0, 0.4: 1.0, 0.5: 1.0},
+            'SC': {0.1: 1.7, 0.2: 1.6, 0.3: 1.5, 0.4: 1.4, 0.5: 1.3},
+            'SD': {0.1: 2.4, 0.2: 2.0, 0.3: 1.8, 0.4: 1.6, 0.5: 1.5},
+            'SE': {0.1: 3.5, 0.2: 3.2, 0.3: 2.8, 0.4: 2.4, 0.5: 2.4}
+        }
+        if site_class == 'SF': return None
+        
+        vals = data[site_class]
+        s1_keys = sorted(vals.keys())
+        
+        if S1 <= s1_keys[0]: return vals[s1_keys[0]]
+        if S1 >= s1_keys[-1]: return vals[s1_keys[-1]]
+        
+        for i in range(len(s1_keys)-1):
+            if s1_keys[i] <= S1 <= s1_keys[i+1]:
+                x0, x1 = s1_keys[i], s1_keys[i+1]
+                y0, y1 = vals[x0], vals[x1]
+                return y0 + (S1 - x0) * (y1 - y0) / (x1 - x0)
+        return 1.0
+
+class ConcreteCalculator:
+    """Modul Beton SNI 2847:2019 (Menggantikan geser balok.csv)"""
     
-    // Implementasi logika interpolasi linear di sini
-    // Jangan hardcode nilai seperti di CSV lama
-    return interpolate(tableFa[siteClass], Ss);
-}
+    @staticmethod
+    def calc_shear(Vu_kN, fc_mpa, bw_mm, d_mm, Nu_kN=0):
+        # Konstanta SNI 2847:2019
+        PHI_SHEAR = 0.75  # KOREKSI DARI 0.6 (LAMA) KE 0.75 (BARU)
+        
+        Vu_N = Vu_kN * 1000
+        Nu_N = Nu_kN * 1000
+        Ag = bw_mm * d_mm # Simplifikasi area efektif
+        
+        # Rumus Vc Sederhana (Tabel 22.5.5.1) dengan efek aksial
+        # Vc = (0.17 * lambda * sqrt(fc) + Nu/6Ag) * bw * d
+        lambda_conc = 1.0 (beton normal)
+        
+        term1 = 0.17 * 1.0 * math.sqrt(fc_mpa)
+        term2 = Nu_N / (6 * Ag) if Ag > 0 else 0
+        
+        Vc_N = (term1 + term2) * bw_mm * d_mm
+        phiVc_N = PHI_SHEAR * Vc_N
+        
+        status = "AMAN"
+        Vs_perlu_N = 0
+        
+        if Vu_N > phiVc_N:
+            status = "PERLU TULANGAN GESER"
+            # Vu <= phi(Vc + Vs) -> Vs >= (Vu/phi) - Vc
+            Vs_perlu_N = (Vu_N / PHI_SHEAR) - Vc_N
+            
+        return {
+            "Vc_kN": Vc_N / 1000,
+            "phiVc_kN": phiVc_N / 1000,
+            "Vs_perlu_kN": Vs_perlu_N / 1000,
+            "Status": status
+        }
+
+class GeotechCalculator:
+    """Modul Pondasi (Menggantikan tphiley.csv)"""
+    
+    @staticmethod
+    def calc_hiley(weight_hammer, height_drop, set_s, elastic_c, weight_pile, efficiency):
+        # R = (ef . W . H) / (S + C/2) * (W + n^2.P)/(W+P) -> Simplifikasi Hiley Modern
+        # e_f: Efisiensi (Drop=0.75, Diesel=0.8-0.9)
+        
+        W = weight_hammer # ton
+        H = height_drop * 100 # convert m to cm
+        S = set_s # cm/blow (final set)
+        C = elastic_c # cm (total elastic compression)
+        P = weight_pile # ton
+        n = 0.5 # koef restitusi beton (typical)
+        
+        energy = efficiency * W * H
+        loss_impact = (W + (n**2)*P) / (W + P)
+        
+        R_ultimate = (energy / (S + (C/2))) * loss_impact
+        R_safe = R_ultimate / 3.0 # SF = 3 (SNI 8460)
+        
+        return R_ultimate, R_safe
+
+# ==========================================
+# 3. ANTARMUKA APLIKASI (STREAMLIT UI)
+# ==========================================
+
+def main():
+    st.sidebar.title("💎 GEMS SMARTSTRUKTUR V7")
+    st.sidebar.caption("Powered by Enginex Core | SNI Compliant")
+    
+    menu = st.sidebar.radio("Pilih Modul:", 
+        ["1. Gempa (SNI 1726:2019)", 
+         "2. Geser Balok (SNI 2847:2019)", 
+         "3. Pondasi Pancang (Modern Hiley)"])
+
+    # --- MODUL 1: GEMPA ---
+    if menu == "1. Gempa (SNI 1726:2019)":
+        st.header("🌋 Analisis Beban Gempa (Respons Spektrum)")
+        st.markdown("Validasi: Menggantikan logika statik `C=0.045` dengan Peta Gempa & Kelas Situs.")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.subheader("Input Parameter")
+            ss = st.number_input("Ss (Percepatan Batuan Dasar Periode Pendek - g)", 0.0, 3.0, 0.8, 0.01)
+            s1 = st.number_input("S1 (Percepatan Batuan Dasar Periode 1 Detik - g)", 0.0, 2.0, 0.4, 0.01)
+            site_class = st.selectbox("Kelas Situs Tanah (SNI 1726:2019)", ["SA", "SB", "SC", "SD", "SE"])
+            
+        # Hitung Logic
+        fa = SeismicCalculator.get_fa(ss, site_class)
+        fv = SeismicCalculator.get_fv(s1, site_class)
+        
+        if fa is not None and fv is not None:
+            sms = fa * ss
+            sm1 = fv * s1
+            sds = (2/3) * sms
+            sd1 = (2/3) * sm1
+            t0 = 0.2 * (sd1/sds)
+            ts = sd1 / sds
+            
+            with col2:
+                st.subheader("Hasil Perhitungan")
+                res_data = {
+                    "Fa (Amplifikasi Pendek)": fa,
+                    "Fv (Amplifikasi 1-dtk)": fv,
+                    "SMS (g)": sms,
+                    "SM1 (g)": sm1,
+                    "SDS (Desain Pendek)": sds,
+                    "SD1 (Desain 1-dtk)": sd1
+                }
+                st.dataframe(pd.DataFrame(res_data.items(), columns=["Parameter", "Nilai"]).set_index("Parameter"))
+            
+            # Plot Response Spectrum
+            st.subheader("📈 Kurva Respons Spektrum Desain (Sa vs T)")
+            t_vals = np.linspace(0, 4.0, 100)
+            sa_vals = []
+            for t in t_vals:
+                if t < t0: val = sds * (0.4 + 0.6*(t/t0))
+                elif t < ts: val = sds
+                else: val = sd1 / t
+                sa_vals.append(val)
+                
+            fig, ax = plt.subplots(figsize=(10, 4))
+            ax.plot(t_vals, sa_vals, color='#0D47A1', linewidth=2)
+            ax.set_xlabel("Periode Getar, T (detik)")
+            ax.set_ylabel("Percepatan Respons Spektral, Sa (g)")
+            ax.grid(True, linestyle='--', alpha=0.6)
+            ax.axvline(ts, color='orange', linestyle='--', label=f'Ts = {ts:.2f}s')
+            ax.legend()
+            st.pyplot(fig)
+            
+            st.info(f"💡 **Insight Engineering:** Untuk T < Ts ({ts:.2f}s), struktur dikontrol oleh percepatan (SDS={sds:.3f}). Untuk T > Ts, dikontrol oleh kecepatan (SD1/T).")
+
+    # --- MODUL 2: BETON ---
+    elif menu == "2. Geser Balok (SNI 2847:2019)":
+        st.header("🏗️ Analisis Geser Balok Beton Bertulang")
+        st.markdown("Validasi: Menggunakan $\phi = 0.75$ (bukan 0.6) dan rumus $V_c$ terbaru.")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            fc = st.number_input("Mutu Beton (fc') - MPa", 15, 60, 25)
+            bw = st.number_input("Lebar Balok (bw) - mm", 100, 1000, 300)
+            d = st.number_input("Tinggi Efektif (d) - mm", 100, 2000, 550)
+            vu = st.number_input("Gaya Geser Terfaktor (Vu) - kN", 0.0, 5000.0, 150.0)
+            nu = st.number_input("Gaya Aksial (Nu) - kN (Tekan +, Tarik -)", -1000.0, 5000.0, 0.0)
+            
+        res = ConcreteCalculator.calc_shear(vu, fc, bw, d, nu)
+        
+        with col2:
+            st.subheader("Hasil Analisis")
+            
+            # Display Metrics
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Kuat Geser Beton (Vc)", f"{res['Vc_kN']:.2f} kN")
+            c2.metric("Kapasitas Rencana (φVc)", f"{res['phiVc_kN']:.2f} kN", help="Menggunakan Phi=0.75")
+            c3.metric("Status", res['Status'], delta_color="normal" if res['Status']=="AMAN" else "inverse")
+            
+            if res['Vs_perlu_kN'] > 0:
+                st.warning(f"⚠️ **PERLU TULANGAN GESER (SENGKANG)**\n\nKuat geser tulangan (Vs) yang diperlukan: **{res['Vs_perlu_kN']:.2f} kN**")
+                
+                # Simple Stirrup Designer
+                fy = st.number_input("Mutu Baja Tulangan (fy) - MPa", 240, 550, 420)
+                n_kaki = st.selectbox("Jumlah Kaki Sengkang", [2, 3, 4])
+                dia_sengkang = st.selectbox("Diameter Sengkang (mm)", [8, 10, 12, 13, 16])
+                
+                Av = n_kaki * 0.25 * math.pi * (dia_sengkang**2)
+                # s = (Av * fy * d) / Vs
+                if res['Vs_perlu_kN'] > 0:
+                    s_calc = (Av * fy * d) / (res['Vs_perlu_kN'] * 1000)
+                    st.success(f"✅ Rekomendasi: Pasang Sengkang **D{dia_sengkang}-{int(s_calc)}** mm")
+
+    # --- MODUL 3: PONDASI ---
+    elif menu == "3. Pondasi Pancang (Modern Hiley)":
+        st.header("🏗️ Kapasitas Tiang Pancang (Kalendering)")
+        st.markdown("Validasi: Menggunakan efisiensi palu dinamis (bukan fixed 0.6).")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.subheader("Data Pemancangan")
+            W_hammer = st.number_input("Berat Palu (Ton)", 0.5, 10.0, 2.5)
+            H_drop = st.number_input("Tinggi Jatuh (m)", 0.5, 5.0, 1.5)
+            W_pile = st.number_input("Berat Tiang + Topi (Ton)", 0.1, 20.0, 1.2)
+            
+            st.subheader("Data Lapangan")
+            S_set = st.number_input("Final Set (S) - cm/pukulan", 0.0, 10.0, 0.25)
+            C_elastic = st.number_input("Rebound Elastis Total (K/C) - cm", 0.0, 5.0, 1.5)
+            
+            tipe_alat = st.selectbox("Tipe Alat Pancang", ["Drop Hammer (Manual)", "Diesel Hammer", "Hydraulic Hammer"])
+            eff_map = {"Drop Hammer (Manual)": 0.60, "Diesel Hammer": 0.85, "Hydraulic Hammer": 0.95}
+            eff = eff_map[tipe_alat]
+            
+        R_ult, R_all = GeotechCalculator.calc_hiley(W_hammer, H_drop, S_set, C_elastic, W_pile, eff)
+        
+        with col2:
+            st.subheader("Kapasitas Dukung")
+            st.write(f"**Efisiensi Alat ({tipe_alat}):** {eff}")
+            
+            st.markdown(f"""
+            <div class="metric-card">
+                <h3>Daya Dukung Ultimit (Qu)</h3>
+                <h1>{R_ult:.2f} Ton</h1>
+            </div>
+            <br>
+            <div class="metric-card" style="border-left: 5px solid #2E7D32;">
+                <h3>Daya Dukung Izin (Qall)</h3>
+                <h1>{R_all:.2f} Ton</h1>
+                <p>Safety Factor = 3.0</p>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            if R_all < 20:
+                st.warning("⚠️ Kapasitas tiang relatif kecil. Cek ulang data kalendering atau pertimbangkan tiang bor.")
+
+if __name__ == "__main__":
+    main()
